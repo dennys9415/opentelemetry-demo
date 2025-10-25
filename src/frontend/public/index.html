@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenTelemetry Demo - Distributed Tracing</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+            padding: 40px 20px;
+        }
+
+        .header h1 {
+            font-size: 3rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 30px;
+            margin-bottom: 40px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        .card h2 {
+            color: #4a5568;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 10px;
+        }
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            flex: 1;
+            min-width: 120px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            background: #a0aec0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .result {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-indicators {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .status-item {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            color: white;
+        }
+
+        .status-item h3 {
+            font-size: 1rem;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+
+        .status-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+        }
+
+        .status-healthy {
+            color: #68d391;
+        }
+
+        .status-unhealthy {
+            color: #fc8181;
+        }
+
+        .links {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-top: 40px;
+        }
+
+        .link-button {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .link-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .tracing-info {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 30px;
+            color: white;
+        }
+
+        .tracing-info h3 {
+            margin-bottom: 15px;
+        }
+
+        .trace-id {
+            font-family: 'Courier New', monospace;
+            background: rgba(0, 0, 0, 0.2);
+            padding: 5px 10px;
+            border-radius: 4px;
+            word-break: break-all;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .controls {
+                flex-direction: column;
+            }
+            
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>OpenTelemetry Demo</h1>
+            <p>Distributed Tracing Demonstration</p>
+        </div>
+
+        <div class="status-indicators" id="statusIndicators">
+            <!-- Status indicators will be populated by JavaScript -->
+        </div>
+
+        <div class="dashboard">
+            <div class="card">
+                <h2>Users Management</h2>
+                <div class="controls">
+                    <button onclick="getUsers()" id="getUsersBtn">
+                        <span class="loading" id="getUsersLoading" style="display: none;"></span>
+                        Get Users
+                    </button>
+                    <button onclick="createUser()" id="createUserBtn">
+                        <span class="loading" id="createUserLoading" style="display: none;"></span>
+                        Create User
+                    </button>
+                </div>
+                <div id="usersResult" class="result">
+                    <!-- Results will be displayed here -->
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Products Catalog</h2>
+                <div class="controls">
+                    <button onclick="getProducts()" id="getProductsBtn">
+                        <span class="loading" id="getProductsLoading" style="display: none;"></span>
+                        Get Products
+                    </button>
+                </div>
+                <div id="productsResult" class="result">
+                    <!-- Results will be displayed here -->
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Order System</h2>
+                <div class="controls">
+                    <button onclick="createOrder()" id="createOrderBtn">
+                        <span class="loading" id="createOrderLoading" style="display: none;"></span>
+                        Create Order
+                    </button>
+                    <button onclick="generateLoad()" id="generateLoadBtn">
+                        <span class="loading" id="generateLoadLoading" style="display: none;"></span>
+                        Generate Load
+                    </button>
+                </div>
+                <div id="ordersResult" class="result">
+                    <!-- Results will be displayed here -->
+                </div>
+            </div>
+        </div>
+
+        <div class="tracing-info">
+            <h3>Distributed Tracing Information</h3>
+            <p>This application demonstrates distributed tracing across multiple services using OpenTelemetry.</p>
+            <p>Each action you take generates traces that can be viewed in:</p>
+            <ul style="margin: 10px 0; padding-left: 20px;">
+                <li><strong>Jaeger</strong>: End-to-end distributed tracing</li>
+                <li><strong>Zipkin</strong>: Alternative tracing backend</li>
+                <li><strong>Prometheus</strong>: Metrics collection</li>
+                <li><strong>Grafana</strong>: Metrics visualization</li>
+            </ul>
+            <p>Current Trace ID: <span id="currentTraceId" class="trace-id">Not available</span></p>
+        </div>
+
+        <div class="links">
+            <a href="http://localhost:16686" target="_blank" class="link-button">View Jaeger UI</a>
+            <a href="http://localhost:9411" target="_blank" class="link-button">View Zipkin UI</a>
+            <a href="http://localhost:9090" target="_blank" class="link-button">View Prometheus</a>
+            <a href="http://localhost:3000" target="_blank" class="link-button">View Grafana</a>
+            <a href="https://opentelemetry.io" target="_blank" class="link-button">OpenTelemetry Docs</a>
+        </div>
+    </div>
+
+    <script>
+        // Current trace ID display
+        let currentTraceId = 'Not available';
+
+        // Update trace ID display
+        function updateTraceId(traceId) {
+            currentTraceId = traceId;
+            document.getElementById('currentTraceId').textContent = traceId;
+        }
+
+        // Show loading state
+        function setLoading(buttonId, loading) {
+            const button = document.getElementById(buttonId);
+            const loadingElement = document.getElementById(buttonId + 'Loading');
+            
+            if (loading) {
+                button.disabled = true;
+                loadingElement.style.display = 'inline-block';
+            } else {
+                button.disabled = false;
+                loadingElement.style.display = 'none';
+            }
+        }
+
+        // Display result in a formatted way
+        function displayResult(elementId, data, title = '') {
+            const element = document.getElementById(elementId);
+            let content = '';
+            
+            if (title) {
+                content += `<strong>${title}</strong>\n`;
+            }
+            
+            if (typeof data === 'string') {
+                content += data;
+            } else {
+                content += JSON.stringify(data, null, 2);
+            }
+            
+            element.innerHTML = `<pre>${content}</pre>`;
+        }
+
+        // Error handling
+        function handleError(elementId, error, operation) {
+            console.error(`${operation} error:`, error);
+            displayResult(elementId, `Error: ${error.message || 'Unknown error occurred'}`, `${operation} Failed`);
+        }
+
+        // API functions
+        async function getUsers() {
+            setLoading('getUsersBtn', true);
+            try {
+                const response = await fetch('/api/users');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                displayResult('usersResult', data, 'Users List');
+                
+                // Extract trace ID from headers if available
+                const traceId = response.headers.get('x-trace-id');
+                if (traceId) {
+                    updateTraceId(traceId);
+                }
+            } catch (error) {
+                handleError('usersResult', error, 'Fetching users');
+            } finally {
+                setLoading('getUsersBtn', false);
+            }
+        }
+
+        async function createUser() {
+            setLoading('createUserBtn', true);
+            try {
+                const userData = {
+                    name: `User ${Date.now()}`,
+                    email: `user${Date.now()}@example.com`
+                };
+                
+                const response = await fetch('/api/users', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(userData)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                displayResult('usersResult', data, 'User Created');
+                
+                const traceId = response.headers.get('x-trace-id');
+                if (traceId) {
+                    updateTraceId(traceId);
+                }
+            } catch (error) {
+                handleError('usersResult', error, 'Creating user');
+            } finally {
+                setLoading('createUserBtn', false);
+            }
+        }
+
+        async function getProducts() {
+            setLoading('getProductsBtn', true);
+            try {
+                const response = await fetch('/api/products');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const data = await response.json();
+                displayResult('productsResult', data, 'Products List');
+                
+                const traceId = response.headers.get('x-trace-id');
+                if (traceId) {
+                    updateTraceId(traceId);
+                }
+            } catch (error) {
+                handleError('productsResult', error, 'Fetching products');
+            } finally {
+                setLoading('getProductsBtn', false);
+            }
+        }
+
+        async function createOrder() {
+            setLoading('createOrderBtn', true);
+            try {
+                const orderData = {
+                    product_id: Math.floor(Math.random() * 3) + 1, // Random product 1-3
+                    quantity: Math.floor(Math.random() * 5) + 1    // Random quantity 1-5
+                };
+                
+                const response = await fetch('/api/orders', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(orderData)
+                });
+                
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                displayResult('ordersResult', data, 'Order Created');
+                
+                const traceId = response.headers.get('x-trace-id');
+                if (traceId) {
+                    updateTraceId(traceId);
+                }
+            } catch (error) {
+                handleError('ordersResult', error, 'Creating order');
+            } finally {
+                setLoading('createOrderBtn', false);
+            }
+        }
+
+        async function generateLoad() {
+            setLoading('generateLoadBtn', true);
+            try {
+                const operations = [];
+                
+                // Generate multiple concurrent operations
+                for (let i = 0; i < 5; i++) {
+                    operations.push(createUser());
+                    operations.push(createOrder());
+                    // Small delay between operations
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                await Promise.all(operations);
+                displayResult('ordersResult', 'Load generation completed! Check Jaeger for distributed traces.', 'Load Test');
+            } catch (error) {
+                handleError('ordersResult', error, 'Generating load');
+            } finally {
+                setLoading('generateLoadBtn', false);
+            }
+        }
+
+        // Check service health
+        async function checkHealth() {
+            const services = [
+                { name: 'Frontend', url: '/health' },
+                { name: 'Backend', url: 'http://localhost:5000/health' }
+            ];
+            
+            const statusContainer = document.getElementById('statusIndicators');
+            statusContainer.innerHTML = '';
+            
+            for (const service of services) {
+                try {
+                    const response = await fetch(service.url);
+                    const isHealthy = response.ok;
+                    
+                    const statusElement = document.createElement('div');
+                    statusElement.className = 'status-item';
+                    statusElement.innerHTML = `
+                        <h3>${service.name}</h3>
+                        <div class="status-value ${isHealthy ? 'status-healthy' : 'status-unhealthy'}">
+                            ${isHealthy ? 'Healthy' : 'Unhealthy'}
+                        </div>
+                    `;
+                    
+                    statusContainer.appendChild(statusElement);
+                } catch (error) {
+                    const statusElement = document.createElement('div');
+                    statusElement.className = 'status-item';
+                    statusElement.innerHTML = `
+                        <h3>${service.name}</h3>
+                        <div class="status-value status-unhealthy">
+                            Unreachable
+                        </div>
+                    `;
+                    
+                    statusContainer.appendChild(statusElement);
+                }
+            }
+        }
+
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            checkHealth();
+            // Refresh health status every 30 seconds
+            setInterval(checkHealth, 30000);
+        });
+    </script>
+</body>
+</html>

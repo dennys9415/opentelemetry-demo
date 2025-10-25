@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+    
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '16'
+    
+    - name: Install dependencies
+      run: |
+        pip install -r requirements.txt
+        cd src/frontend && npm install
+    
+    - name: Run tests
+      run: |
+        pytest tests/
+        cd src/frontend && npm test
+    
+    - name: Build Docker images
+      run: docker-compose build
+    
+    - name: Run integration tests
+      run: |
+        docker-compose up -d
+        sleep 30
+        docker-compose ps
+        ./scripts/health-check.sh

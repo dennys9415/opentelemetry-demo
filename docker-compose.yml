@@ -1,0 +1,133 @@
+version: '3.8'
+
+services:
+  # Frontend Service
+  frontend:
+    build: 
+      context: ./src/frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=development
+      - OTEL_SERVICE_NAME=frontend-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317
+      - BACKEND_URL=http://backend:5000
+    depends_on:
+      - backend
+      - collector
+    networks:
+      - otel-demo
+
+  # Backend Service
+  backend:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    environment:
+      - OTEL_SERVICE_NAME=backend-service
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4317
+      - DATABASE_URL=postgresql://demo_user:demo_pass@database:5432/demo_db
+      - JAEGER_AGENT_HOST=jaeger
+      - JAEGER_AGENT_PORT=6831
+    depends_on:
+      - database
+      - collector
+    networks:
+      - otel-demo
+
+  # Database
+  database:
+    image: postgres:13-alpine
+    environment:
+      - POSTGRES_DB=demo_db
+      - POSTGRES_USER=demo_user
+      - POSTGRES_PASSWORD=demo_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./src/database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - otel-demo
+
+  # OpenTelemetry Collector
+  collector:
+    image: otel/opentelemetry-collector:0.60.0
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./deployments/otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus metrics exposed by the collector
+      - "13133:13133" # health_check extension
+    depends_on:
+      - jaeger
+      - zipkin
+    networks:
+      - otel-demo
+
+  # Jaeger
+  jaeger:
+    image: jaegertracing/all-in-one:1.35
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686" # UI
+      - "14268:14268" # Collector
+      - "14250:14250" # Collector
+      - "6831:6831/udp" # JAEGER_AGENT_PORT
+    networks:
+      - otel-demo
+
+  # Zipkin
+  zipkin:
+    image: openzipkin/zipkin:2.23
+    ports:
+      - "9411:9411"
+    networks:
+      - otel-demo
+
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./deployments/prometheus.yml:/etc/prometheus/prometheus.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - otel-demo
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./deployments/grafana-dashboard.yml:/etc/grafana/provisioning/dashboards/dashboard.yml
+      - ./deployments/dashboard.json:/var/lib/grafana/dashboards/dashboard.json
+    depends_on:
+      - prometheus
+    networks:
+      - otel-demo
+
+volumes:
+  postgres_data:
+
+networks:
+  otel-demo:
+    driver: bridge
