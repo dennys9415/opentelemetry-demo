@@ -1,8 +1,5 @@
 # OpenTelemetry Demo - Distributed Tracing Application
 
-[![CI](https://github.com/your-username/opentelemetry-demo/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/opentelemetry-demo/actions/workflows/ci.yml)
-[![License](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-
 A comprehensive demo application demonstrating distributed tracing with OpenTelemetry across microservices.
 
 ```
